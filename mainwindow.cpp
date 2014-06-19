@@ -134,6 +134,7 @@ void MainWindow::showFileInfo(QString p)
              << tr("path: %1").arg(finfo.canonicalPath())
              << tr("suffix: .%1").arg(finfo.completeSuffix())
              << tr("size: %1 bytes").arg(QString::number( finfo.size() ))
+             << tr("encrypted: %1").arg(__checkMagicHead(finfo.canonicalFilePath().toStdString().c_str())?tr("yes"):tr("no"))
              << tr("created: %1").arg(finfo.created().toString())
              << tr("last read: %1").arg(finfo.lastRead().toString())
              << tr("last modified: %1").arg(finfo.lastModified().toString());
@@ -153,6 +154,7 @@ void MainWindow::selectedRows(QList<int> &rows, QTableWidget *w)
 
 void MainWindow::toEncrypt()
 {
+    // get password
     QString tmp_pwd;
     pwdDialog dialog;
     if( dialog.exec() == QDialog::Rejected )
@@ -162,26 +164,37 @@ void MainWindow::toEncrypt()
         qDebug()<<tmp_pwd;
     }
 
-    unsigned char arr_pwd[16];
-    md5_buffer( tmp_pwd.toStdString().c_str(), tmp_pwd.size(), arr_pwd );
+    // compute md5 for password as password to encrypt
+    unsigned char arr_pwd[MagicHeadLen];
+    md5_buffer( tmp_pwd.toStdString().c_str(),
+                strlen(tmp_pwd.toStdString().c_str()),
+                arr_pwd );
 
     QList<int> rows;
     selectedRows(rows, ui->tableWidgetFile);
-    QStringList list;
+    QStringList list, skipList;
     int count = rows.count();
     for( int i = 0; i < count; ++i)
     {
-        QDir dir(curDir);
-        __encrypt( dir.filePath(ui->tableWidgetFile->item(rows[i], 0)->text()).toStdString().c_str(), arr_pwd, 16 );
+        QString path = QDir(curDir).filePath(ui->tableWidgetFile->item(rows[i], 0)->text());
+        if( QFileInfo(path).isDir() ) {
+            skipList << "Dir: " + QFileInfo(path).fileName();
+            continue;
+        }
+        __encrypt( path.toStdString().c_str(), arr_pwd, MagicHeadLen );
         updateRow(rows[i]);
-        list.append(ui->tableWidgetFile->item(rows[i], 0)->text());
+        list.append(QFileInfo(path).fileName());
     }
     QMessageBox::information(this, tr("Encrypt info"),
-                             tr("Encrypted file: ")  + '\n' + list.join("\n\t"));
+                             tr("Encrypted files: ")
+                             + "\n\t" + list.join("\n\t")
+                             + "\n" + tr("Skip files: ") + "\n\t"
+                             + skipList.join("\n\t"));
 }
 
 void MainWindow::toDecrypt()
 {
+    // get password
     QString tmp_pwd;
     pwdDialog dialog;
     if( dialog.exec() == QDialog::Rejected )
@@ -191,23 +204,23 @@ void MainWindow::toDecrypt()
         qDebug()<<tmp_pwd;
     }
 
+    // compute md5
     unsigned char arr_pwd[16];
     md5_buffer( tmp_pwd.toStdString().c_str(), tmp_pwd.size(), arr_pwd );
 
     QList<int> rows;
-    QList<QString> skipList, dealedList;
+    QStringList skipList, dealedList;
     selectedRows(rows, ui->tableWidgetFile);
     int count = rows.count();
     for( int i = 0; i < count; ++i)
     {
-        QDir dir(curDir);
-        QString path = dir.filePath(ui->tableWidgetFile->item(rows[i], 0)->text());
+        QString path = QDir(curDir).filePath(ui->tableWidgetFile->item(rows[i], 0)->text());
         if( !__checkMagicHead(path.toStdString().c_str()) ) {
-            skipList.append( QFileInfo(path).fileName() );
+            skipList << QFileInfo(path).fileName();
             continue;
         }
         __decrypt( path.toStdString().c_str(), arr_pwd, 16 );
-        dealedList.append( QFileInfo(path).fileName() );
+        dealedList << QFileInfo(path).fileName();
         updateRow(rows[i]);
     }
     QString msg = tr("Decrypted files: ") + '\n';
