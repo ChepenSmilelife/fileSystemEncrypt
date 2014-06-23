@@ -1,14 +1,17 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "encrypt.h"
+
 #include "md5.h"
 //#include <cstdio>
+#include "qencrypt.h"
 
 #include <QDebug>
 
 #include <QDir>
 #include <QIcon>
 #include <QTime>
+#include <QFile>
+#include <QTextStream>
 #include <QMessageBox>
 #include "pwddialog.h"
 
@@ -61,8 +64,6 @@ void MainWindow::buildSignalAndSlots()
             this, SLOT(toEncrypt()));
     connect(ui->pushButtonDecrypt, SIGNAL(clicked()),
             this, SLOT(toDecrypt()));
-    connect(ui->pushButtonCheck, SIGNAL(clicked()),
-            this, SLOT(toCheck()));
 
     connect(ui->actionEncrypt, SIGNAL(triggered()),
             this, SLOT(toEncrypt()));
@@ -134,7 +135,6 @@ void MainWindow::showFileInfo(QString p)
              << tr("path: %1").arg(finfo.canonicalPath())
              << tr("suffix: .%1").arg(finfo.completeSuffix())
              << tr("size: %1 bytes").arg(QString::number( finfo.size() ))
-             << tr("encrypted: %1").arg(__checkMagicHead(finfo.canonicalFilePath().toStdString().c_str())?tr("yes"):tr("no"))
              << tr("created: %1").arg(finfo.created().toString())
              << tr("last read: %1").arg(finfo.lastRead().toString())
              << tr("last modified: %1").arg(finfo.lastModified().toString());
@@ -164,12 +164,6 @@ void MainWindow::toEncrypt()
         qDebug()<<tmp_pwd;
     }
 
-    // compute md5 for password as password to encrypt
-    unsigned char arr_pwd[MagicHeadLen];
-    md5_buffer( tmp_pwd.toStdString().c_str(),
-                strlen(tmp_pwd.toStdString().c_str()),
-                arr_pwd );
-
     QList<int> rows;
     selectedRows(rows, ui->tableWidgetFile);
     QStringList list, skipList;
@@ -181,8 +175,10 @@ void MainWindow::toEncrypt()
             skipList << "Dir: " + QFileInfo(path).fileName();
             continue;
         }
-        __encrypt( path.toStdString().c_str(), arr_pwd, MagicHeadLen );
-        updateRow(rows[i]);
+        qDebug()<<"encrypt start... "<<path;
+        encryptFile(tmp_pwd, path);
+        qDebug()<<"encrypt... end";
+        updateFileList();
         list.append(QFileInfo(path).fileName());
     }
     QMessageBox::information(this, tr("Encrypt info"),
@@ -204,10 +200,6 @@ void MainWindow::toDecrypt()
         qDebug()<<tmp_pwd;
     }
 
-    // compute md5
-    unsigned char arr_pwd[16];
-    md5_buffer( tmp_pwd.toStdString().c_str(), tmp_pwd.size(), arr_pwd );
-
     QList<int> rows;
     QStringList skipList, dealedList;
     selectedRows(rows, ui->tableWidgetFile);
@@ -215,13 +207,9 @@ void MainWindow::toDecrypt()
     for( int i = 0; i < count; ++i)
     {
         QString path = QDir(curDir).filePath(ui->tableWidgetFile->item(rows[i], 0)->text());
-        if( !__checkMagicHead(path.toStdString().c_str()) ) {
-            skipList << QFileInfo(path).fileName();
-            continue;
-        }
-        __decrypt( path.toStdString().c_str(), arr_pwd, 16 );
+        decryptFile(tmp_pwd, path);
         dealedList << QFileInfo(path).fileName();
-        updateRow(rows[i]);
+        updateFileList();
     }
     QString msg = tr("Decrypted files: ") + '\n';
     for( int i = 0; i < dealedList.count(); ++i )
@@ -232,17 +220,8 @@ void MainWindow::toDecrypt()
     QMessageBox::information( this, tr("decrypted info"), msg );
 }
 
-void MainWindow::updateRow(int r)
-{
-    QDir dir(curDir);
-    QString path = dir.filePath(ui->tableWidgetFile->item(r, 0)->text());
-    QFileInfo info(path);
-    ui->tableWidgetFile->item(r, 1)->setText(info.created().toString());
-    ui->tableWidgetFile->item(r, 2)->setText(QString::number( info.size() ) + " " + tr("bytes"));
-}
-
 void MainWindow::toCheck()
-{
+{/*
     QList<int> rows;
     selectedRows(rows, ui->tableWidgetFile);
     QStringList list, skipList;
@@ -250,7 +229,7 @@ void MainWindow::toCheck()
     for( int i = 0; i < count; ++i)
     {
         QString path = QDir(curDir).filePath(ui->tableWidgetFile->item(rows[i], 0)->text());
-        if(__checkMagicHead(path.toStdString().c_str()))
+        if(!__checkMagicHead(path.toStdString().c_str()))
             list << QFileInfo(path).fileName();
         else
             skipList << QFileInfo(path).fileName();
@@ -259,5 +238,22 @@ void MainWindow::toCheck()
             + list.join("\n\t") + "\n"
             + tr("Not encrypted: ") + "\n\t"
             + skipList.join("\n\t") + "\n";
-    QMessageBox::information(this, tr("Check Information"), msg);
+    QMessageBox::information(this, tr("Check Information"), msg);*/
+}
+
+void MainWindow::addLog(QString log)
+{
+    ui->textEditLog->append(log);
+}
+
+void MainWindow::closeEvent(QCloseEvent *e)
+{
+    QString logName = QDateTime::currentDateTime().toString("fe-yyyy-MM-dd-HH-mm-ss.log");
+    qDebug()<<logName;
+    QFile logFile( logName );
+    if( logFile.open(QIODevice::WriteOnly) ) {
+        QTextStream out(&logFile);
+        out << ui->textEditLog->toPlainText();
+    }
+    e->accept();
 }

@@ -14,14 +14,15 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    encrypt.c \
     md5.c \
-    pwddialog.cpp
+    pwddialog.cpp \
+    xorencrypt.c
 
 HEADERS  += mainwindow.h \
-    encrypt.h \
     md5.h \
-    pwddialog.h
+    pwddialog.h \
+    qencrypt.h \
+    xorencrypt.h
 
 FORMS    += mainwindow.ui \
     pwddialog.ui

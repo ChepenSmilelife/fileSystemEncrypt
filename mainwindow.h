@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QTableWidget>
+#include <QCloseEvent>
 
 namespace Ui {
 class MainWindow;
@@ -24,9 +25,11 @@ public slots:
     void toEncrypt();
     void toDecrypt();
     void toCheck();
+    void addLog(QString log);
 
 protected:
     void selectedRows(QList<int> &rows, QTableWidget *w);
+    void closeEvent(QCloseEvent *e);
 
 private:
     Ui::MainWindow *ui;
@@ -34,7 +37,6 @@ private:
     void createStatubar();
     void buildSignalAndSlots();
     void buildFileTableWidget(QTableWidget *);
-    void updateRow(int r);
     QString curDir;
     bool hasLogin;
     unsigned char pwd[16];
