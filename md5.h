@@ -21,7 +21,8 @@
 #define _MD5_H 1
 
 #include <stdio.h>
-#include <stdint.h>
+#include <stdint-gcc.h>
+//#include <stdint.h>
 
 #define MD5_DIGEST_SIZE 16
 #define MD5_BLOCK_SIZE 64
