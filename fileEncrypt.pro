@@ -16,16 +16,19 @@ SOURCES += main.cpp\
         mainwindow.cpp \
     md5.c \
     pwddialog.cpp \
-    xorencrypt.c
+    xorencrypt.c \
+    logindialog.cpp
 
 HEADERS  += mainwindow.h \
     md5.h \
     pwddialog.h \
     qencrypt.h \
-    xorencrypt.h
+    xorencrypt.h \
+    logindialog.h
 
 FORMS    += mainwindow.ui \
-    pwddialog.ui
+    pwddialog.ui \
+    logindialog.ui
 
 RESOURCES += \
     icon.qrc

@@ -19,6 +19,7 @@ public:
 
 public slots:
     void quitAll();
+    void toLoginOrLogout();
     void updateFileList();
     void fileListDoubleClick(int r);
     void showFileInfo(QString p);
@@ -26,6 +27,11 @@ public slots:
     void toDecrypt();
     void toCheck();
     void addLog(QString log);
+    bool getKeyFromServer(QString &pwd, QString file);
+    bool sendKeyToServer(QString pwd, QString file);
+
+signals:
+    void messageChange(QString log);
 
 protected:
     void selectedRows(QList<int> &rows, QTableWidget *w);
@@ -35,11 +41,12 @@ private:
     Ui::MainWindow *ui;
     void dataInit();
     void createStatubar();
+    void buildButtonGroup();
     void buildSignalAndSlots();
     void buildFileTableWidget(QTableWidget *);
     QString curDir;
     bool hasLogin;
-    unsigned char pwd[16];
+    QString server;
 };
 
 #endif // MAINWINDOW_H

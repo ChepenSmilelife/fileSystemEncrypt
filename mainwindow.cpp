@@ -14,6 +14,7 @@
 #include <QTextStream>
 #include <QMessageBox>
 #include "pwddialog.h"
+#include "logindialog.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -24,6 +25,8 @@ MainWindow::MainWindow(QWidget *parent) :
     dataInit();
 
     createStatubar();
+
+    buildButtonGroup();
 
     buildFileTableWidget(ui->tableWidgetFile);
 
@@ -46,7 +49,6 @@ void MainWindow::dataInit()
 {
     curDir = QDir(".").canonicalPath();
     hasLogin = false;
-    sprintf((char *) pwd, "helloworld");
 }
 
 void MainWindow::createStatubar()
@@ -71,6 +73,12 @@ void MainWindow::buildSignalAndSlots()
             this, SLOT(toDecrypt()));
     connect(ui->actionCheck, SIGNAL(triggered()),
             this, SLOT(toCheck()));
+
+    connect(this, SIGNAL(messageChange(QString)),
+            this, SLOT(addLog(QString)));
+
+    connect(ui->actionLogin, SIGNAL(triggered()),
+            this, SLOT(toLoginOrLogout()));
 }
 
 void MainWindow::buildFileTableWidget(QTableWidget *table)
@@ -110,6 +118,9 @@ void MainWindow::updateFileList()
                                      new QTableWidgetItem(QString::number(fileList[i].size()) + " " + tr("bytes")));
     }
     ui->tableWidgetFile->scrollToTop();
+    emit messageChange(QDateTime::currentDateTime().toString() + '\t'
+                       + tr("update file list of directory: ")
+                       + curDir );
 }
 
 void MainWindow::fileListDoubleClick(int r)
@@ -122,7 +133,7 @@ void MainWindow::fileListDoubleClick(int r)
         curDir = dir.canonicalPath();
         updateFileList();
         statusBar()->showMessage(curDir);
-    }else{
+    }else {
         showFileInfo( dir.filePath(name) );
     }
 }
@@ -154,6 +165,9 @@ void MainWindow::selectedRows(QList<int> &rows, QTableWidget *w)
 
 void MainWindow::toEncrypt()
 {
+    if(ui->checkBoxSyncServer->isChecked() && !hasLogin)
+        return;
+
     // get password
     QString tmp_pwd;
     pwdDialog dialog;
@@ -177,6 +191,20 @@ void MainWindow::toEncrypt()
         }
         qDebug()<<"encrypt start... "<<path;
         encryptFile(tmp_pwd, path);
+
+        // sync key to remote server
+        if(ui->checkBoxSyncServer->isChecked()) {
+            QString errorMsg = QDateTime::currentDateTime().toString()
+                    + "\t[";
+            if(!sendKeyToServer(tmp_pwd, path))
+                errorMsg += tr("fail");
+            else
+                errorMsg += tr("success");
+            errorMsg += "]\t" + tr("sync key to server")
+                    + "[" + server + "]:" + QFileInfo(path).fileName();
+            emit messageChange(errorMsg);
+        }
+
         qDebug()<<"encrypt... end";
         updateFileList();
         list.append(QFileInfo(path).fileName());
@@ -190,6 +218,9 @@ void MainWindow::toEncrypt()
 
 void MainWindow::toDecrypt()
 {
+    if(ui->checkBoxSyncServer->isChecked() && !hasLogin)
+        return;
+
     // get password
     QString tmp_pwd;
     pwdDialog dialog;
@@ -207,16 +238,36 @@ void MainWindow::toDecrypt()
     for( int i = 0; i < count; ++i)
     {
         QString path = QDir(curDir).filePath(ui->tableWidgetFile->item(rows[i], 0)->text());
-        decryptFile(tmp_pwd, path);
+
+        if(QFileInfo(path).isDir()) {
+            skipList << QFileInfo(path).fileName();
+        }
+
+        // sync key from remote server
+        if(ui->checkBoxSyncServer->isChecked()) {
+            QString errorMsg = QDateTime::currentDateTime().toString() + "\t[";
+            if(!getKeyFromServer(tmp_pwd, path))
+                errorMsg += tr("fail");
+            else {
+                errorMsg += tr("success");
+                decryptFile(tmp_pwd, path);
+            }
+            errorMsg += "]\t" + tr("sync key from server")
+                    + "[" + server + "]:" + QFileInfo(path).fileName();
+            emit messageChange(errorMsg);
+        }
+        else {
+            decryptFile(tmp_pwd, path);
+        }
+
         dealedList << QFileInfo(path).fileName();
         updateFileList();
     }
-    QString msg = tr("Decrypted files: ") + '\n';
-    for( int i = 0; i < dealedList.count(); ++i )
-        msg += "\t" + dealedList[i] + '\n';
-    msg += tr("Skiped files: ") + '\n';
-    for( int i = 0; i < skipList.count(); ++i )
-        msg += "\t" + skipList[i] + "    " + tr("had not been encrypted") +'\n';
+    QString msg = tr("Decrypted files: ") + "\n\t"
+            + dealedList.join("\n\t") + "\n"
+            + tr("Skiped files: ") + "\n\t"
+            + skipList.join("\n\t");
+
     QMessageBox::information( this, tr("decrypted info"), msg );
 }
 
@@ -256,4 +307,46 @@ void MainWindow::closeEvent(QCloseEvent *e)
         out << ui->textEditLog->toPlainText();
     }
     e->accept();
+}
+
+void MainWindow::buildButtonGroup()
+{
+    ui->buttonGroupOld->setId(ui->radioButtonOverlap,   0);
+    ui->buttonGroupOld->setId(ui->radioButtonDelete,    1);
+    ui->buttonGroupOld->setId(ui->radioButtonKeep,      2);
+
+    /* hide some button */
+    ui->radioButtonDelete->hide();
+    ui->radioButtonKeep->hide();
+}
+
+bool MainWindow::sendKeyToServer(QString pwd, QString file)
+{
+    return true;
+}
+
+bool MainWindow::getKeyFromServer(QString &pwd, QString file)
+{
+    return true;
+}
+
+void MainWindow::toLoginOrLogout()
+{
+    if(hasLogin) {
+        ui->actionLogin->setText(tr("Logout"));
+        hasLogin = false;
+    }else {
+        loginDialog lgDialog;
+        lgDialog.setWindowTitle(tr("Login to server"));
+        QString account, pwd;
+        if(lgDialog.exec() == QDialog::Accepted) {
+            QStringList infoList = lgDialog.loginInfo();
+            account =   infoList[0];
+            pwd     =   infoList[1];
+        }else
+            return;
+        qDebug()<<"account: "<< account<<", pwd: "<<pwd;
+        ui->actionLogin->setText(tr("Login"));
+        hasLogin = true;
+    }
 }
